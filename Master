@@ -1,0 +1,280 @@
+    Dim MinWords As Integer
+    Dim MaxWords As Integer
+    Dim Pwrds As Integer
+    Dim Swrds As Integer
+    Dim JumpTop As String
+    Dim Pgraph As Object
+    Dim Sen As Object
+    Dim wCount As Long
+    Dim aRange As Range
+    Dim tWords
+    Dim inactiveSW As Boolean
+    Dim Title As String
+    Dim i As Integer
+    Dim lclist As String
+    Dim wrd As Integer
+    Dim sTest As String
+    Dim H As Hyperlink
+Sub TextBroker()
+    lclist = " a about above across after against along among amongst an and another around as at before behind between but by despite down during for from in inside into near of off on or out over since than the through to towards under until up upon versus with within without yet "
+    Set Pgraph = Application.ActiveDocument.Paragraphs
+    Set Sen = Application.ActiveDocument.Sentences
+    MinWords = 0
+    MaxWords = 17
+' This section removes the words "jump to top" and any other excess content at the end of the document.
+    Selection.HomeKey Unit:=wdStory
+    JumpTop = "Jump to top"
+    Selection.HomeKey Unit:=wdStory
+    Selection.Find.ClearFormatting
+    With Selection.Find
+        .Text = "Jump to top"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchAllWordForms = False
+        .MatchSoundsLike = False
+        .MatchWildcards = False
+    End With
+    Selection.Find.Execute
+    If Selection.Text = JumpTop Then
+        Selection.MoveLeft Unit:=wdCharacter, Count:=1
+        Selection.EndKey Unit:=wdStory, Extend:=wdExtend
+        Selection.TypeBackspace
+    End If
+' This section searches for and distinguishes subheadings where the author only bolded the first sentence
+' of a paragraph rather than writing them as a seperate individual line.
+    Selection.HomeKey Unit:=wdStory
+    Selection.Find.ClearFormatting
+    Selection.Find.Font.Bold = True
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "([a-z][.])"
+        .Replacement.Text = "\1^p"
+        .Format = True
+        .MatchWildcards = True
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+' This section deals with document spacing. It replaces non-breaking spaces with regular spaces, and then
+' condenses all consecutive line breaks and paragraph breaks into a single paragraph break.
+    Selection.HomeKey Unit:=wdStory
+    Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "^s"
+        .Replacement.Text = " "
+        .Format = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+        .Text = "^l{1,9}"
+        .Replacement.Text = "^p"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+       .Text = " ^13"
+        .Replacement.Text = "^p"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+        With Selection.Find
+        .Text = "^13{1,9}"
+        .Replacement.Text = "^p"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+' This section is a fail-safe to catch improperly formatted lists and prevent them from being identified as
+' subheadings.
+    For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+        If ActiveDocument.Paragraphs(Pwrds).Range.Characters(1) = ChrW(&H2022) Then
+            ActiveDocument.Paragraphs(Pwrds).Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:= _
+                ListGalleries(wdBulletGallery).ListTemplates(1), ContinuePreviousList:= _
+                True, ApplyTo:=wdListApplyToWholeList, DefaultListBehavior:= _
+                wdWord10ListBehavior
+        End If
+    Next Pwrds
+' This section sets the title and subheadings to H1 and H2, respectively, and then removes premables and
+' punctuation in the subheadings for a clean, uniform look.
+    For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+        If Pgraph(Pwrds).Range.words.Count <= MaxWords And _
+            Pgraph(Pwrds).Range.ListFormat.ListType = wdListNoNumbering Then
+            Pgraph(Pwrds).Style = ("Heading 2")
+        End If
+    Next Pwrds
+    For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+        If Pgraph(Pwrds).Style <> ("Normal") Then
+            For wrd = 2 To Pgraph(Pwrds).Range.words.Count
+            sTest = Trim(Pgraph(Pwrds).Range.words(wrd))
+            sTest = " " & LCase(sTest) & " "
+                If InStr(lclist, sTest) And _
+                ActiveDocument.Paragraphs(Pwrds).Range.words(wrd - 1).Characters(1) <> ":" Then
+                    Pgraph(Pwrds).Range.words(wrd).Case = wdLowerCase
+                ElseIf Pgraph(Pwrds).Range.words(wrd).Case = wdUpperCase Then
+                    Pgraph(Pwrds).Range.words(wrd).Case = wdUpperCase
+                Else: Pgraph(Pwrds).Range.words(wrd).Case = wdTitleWord
+                End If
+            Next wrd
+        End If
+    Next Pwrds
+    ActiveDocument.Paragraphs(1).Style = ("Heading 1")
+    Selection.HomeKey Unit:=wdStory
+    Selection.Find.ClearFormatting
+    Selection.Find.Style = ActiveDocument.Styles("Heading 2")
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "[1-9]@[!a-zA-Z]"
+        .Replacement.Text = ""
+        .Wrap = wdStop
+        .Format = True
+    End With
+    Do While Selection.Find.Execute = True
+        Selection.MoveRight Unit:=wdCharacter, Count:=1
+        Selection.HomeKey Unit:=wdLine, Extend:=wdExtend
+        Selection.Delete Unit:=wdCharacter, Count:=1
+    Loop
+    With Selection.Find
+        .Text = "[:]"
+        .Replacement.Text = ""
+    End With
+    Do While Selection.Find.Execute = True
+        Selection.HomeKey Unit:=wdLine, Extend:=wdExtend
+        Selection.Range.Style = ("Normal")
+    Loop
+    Selection.HomeKey Unit:=wdStory
+    With Selection.Find
+        .Text = "."
+        .Replacement.Text = ""
+        .Wrap = wdFindContinue
+        .MatchWildcards = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+' The next section deals with predictable grammatical corrections. Specifically, it corrects capitalization
+' of common prepositions and function words and at the beginning of sentences, deletes tab indentures and
+' extra spaces, and corrects the formatting of hyphens, en and em dashes, apostrophes, and quoatation marks.
+    Selection.HomeKey Unit:=wdStory
+    For Swrds = 1 To ActiveDocument.Sentences.Count
+        If ActiveDocument.Sentences(Swrds).words(1).Case <> wdUpperCase Then
+           ActiveDocument.Sentences(Swrds).words(1).Case = wdTitleWord
+        End If
+    Next Swrds
+    Selection.HomeKey Unit:=wdStory
+    Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "^t"
+        .Replacement.Text = ""
+        .Format = False
+        .Wrap = wdFindContinue
+        .MatchWildcards = False
+    End With
+    With Selection.Find
+        .Text = " {2,9}"
+        .Replacement.Text = " "
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+        .Text = """"
+        .Replacement.Text = """"
+        .MatchWildcards = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+        .Text = "'"
+        .Replacement.Text = "'"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+        .Text = " - "
+        .Replacement.Text = "—"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    With Selection.Find
+        .Text = " – "
+        .Replacement.Text = "—"
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    Selection.EndKey Unit:=wdStory
+    Selection.TypeBackspace
+'
+' JUSTIN ONLY - Removes hyperlinks from the document
+'
+    Selection.WholeStory
+    Selection.Fields.Unlink
+    Selection.HomeKey Unit:=wdStory
+'
+' JUSTIN ONLY - This section marks paragraphs that are too long in red
+'
+    For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+        If Pgraph(Pwrds).Range.ComputeStatistics(wdStatisticLines) > 6 Then
+            Pgraph(Pwrds).Range.Font.ColorIndex = wdRed
+        ElseIf Pgraph(Pwrds).Range.Style = ("Heading 1") Then
+            Pgraph(Pwrds).Range.Style = ("Heading 1")
+        ElseIf Pgraph(Pwrds).Range.Style = ("Heading 2") Then
+            Pgraph(Pwrds).Range.Style = ("Heading 2")
+        Else: Pgraph(Pwrds).Range.Font.ColorIndex = wdBlack
+        End If
+    Next Pwrds
+    For Swrds = 1 To ActiveDocument.Sentences.Count
+        ActiveDocument.Sentences(Swrds).words(1).Case = wdTitleWord
+    Next Swrds
+    Selection.HomeKey Unit:=wdStory
+End Sub
+Sub StartEdit()
+    For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+        If ActiveDocument.Paragraphs(Pwrds).Range.Style <> ("Heading 1") And _
+            ActiveDocument.Paragraphs(Pwrds).Range.Style <> ("Heading 2") Then
+            ActiveDocument.Paragraphs(Pwrds).Range.Font.ColorIndex = wdRed
+        End If
+    Next Pwrds
+    Set aRange = Selection.Range
+    aRange.Start = ActiveDocument.Range.Start
+    inactiveSW = False
+    Call StartTimer
+End Sub
+Private Sub StartTimer()
+    Application.OnTime Now + TimeValue("00:00:03"), "ZZ"
+End Sub
+Public Sub zz()
+    If inactiveSW Then Exit Sub
+    With ActiveDocument
+        MinWords = 0
+        MaxWords = 21
+        Set Pgraph = Application.ActiveDocument.Paragraphs
+        Set Sen = Application.ActiveDocument.Sentences
+        For Pwrds = 1 To ActiveDocument.Paragraphs.Count
+            If Pgraph(Pwrds).Range.ComputeStatistics(wdStatisticLines) > 6 And _
+                Pgraph(Pwrds).Range.Style = ("Normal") And _
+                Pgraph(Pwrds).Range.Font.ColorIndex <> wdRed Then
+                Pgraph(Pwrds).Range.Font.ColorIndex = wdRed
+            ElseIf Pgraph(Pwrds).Range.ComputeStatistics(wdStatisticLines) <= 6 And _
+                Pgraph(Pwrds).Range.Style = ("Normal") And _
+                Pgraph(Pwrds).Range.Font.ColorIndex = wdRed Then
+                Pgraph(Pwrds).Range.Font.ColorIndex = wdBlack
+            End If
+        Next Pwrds
+        For Swrds = 1 To ActiveDocument.Sentences.Count
+            If Sen(Swrds).words.Count > 23 And _
+                Sen(Swrds).Style = ("Normal") And _
+                Sen(Swrds).Font.ColorIndex = wdBlack Then
+                Sen(Swrds).Font.ColorIndex = wdBrightGreen
+            ElseIf Sen(Swrds).words.Count <= 23 And _
+                Sen(Swrds).Style = ("Normal") And _
+                Sen(Swrds).Font.ColorIndex = wdBrightGreen Then
+                Sen(Swrds).Font.ColorIndex = wdBlack
+            End If
+        Next Swrds
+    End With
+    StartTimer
+End Sub
+Sub StopEdit()
+    inactiveSW = True
+    Set Sen = Application.ActiveDocument.Sentences
+    For Swrds = 1 To ActiveDocument.Sentences.Count
+        If Sen(Swrds).Font.ColorIndex = wdRed Then
+            Sen(Swrds).Font.ColorIndex = wdBlack
+        ElseIf Sen(Swrds).Font.ColorIndex = wdBrightGreen Then
+            Sen(Swrds).Font.ColorIndex = wdBlack
+        End If
+    Next Swrds
+        For Each H In ActiveDocument.Hyperlinks
+            H.Range.Style = ("Hyperlink")
+        Next H
+End Sub
